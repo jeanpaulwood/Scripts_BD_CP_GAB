@@ -27,7 +27,7 @@ GO
 -- alter date: 23/08/2019
 -- 1º Implementado a SP que atualiza o saldo e o saldo anterior do funcionário no CP
 -- =============================================
-CREATE PROCEDURE [dbo].[spug_recalcularCartaodePonto_dia] 
+ALTER PROCEDURE [dbo].[spug_recalcularCartaodePonto_dia] 
 	-- Add the parameters for the function here
 	@funcicodigo int,@mes smallint, @ano int, @usuarcodigo int, @cartadatajornada datetime
 AS
@@ -137,14 +137,19 @@ BEGIN
 	@horainterjornadacomplsdesc int = NULL,
 	@leimotorista bit, -- INFORMA SE FUNCIONÁRIO É OU NÃO LEI DO MOTORISTA
 	-- INFORMA SE FUNCIONÁRIO É OU NÃO BANCO DE HORAS BASEADO NO DADO HISTÓRICO. ALTERAÇÃO FEITA EM 01/06/2020 POR JEAN PAUL.
-	@bancodehoras bit /*= dbo.retornarSituacaoBhFuncionario(@funcicodigo,@cartadatajornada)*/,
+	@bancodehoras bit,
 	@compljornada int, -- INFORMA SE EVENTO COMPLEMENTA OU NÃO A JORNADA DO DIA
 	@contjornada int,
 	@afdtgcodigo int, @afdtgcodigo_e1 int,@afdtgcodigo_s1 int,@afdtgcodigo_e2 int,@afdtgcodigo_s2 int,@afdtgcodigo_e3 int,@afdtgcodigo_s3 int,@afdtgcodigo_e4 int,@afdtgcodigo_s4 int,
-	@cartadesconsiderapreassinalado bit, @ctococodigooriginal smallint, @h_referencia smallint
+	@cartadesconsiderapreassinalado bit, @ctococodigooriginal smallint, @h_referencia smallint, @datademissao datetime
 
-	select @sit_f = funcscodigo, @pis = funcipis /*,@leimotorista = coalesce(funcileimotorista,0)*/ from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
+	select @pis = funcipis, @datademissao = funcidatademissao from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
 	
+	if (coalesce(@datademissao,'1900-01-01 00:00:00.000') = '1900-01-01 00:00:00.000')
+	begin
+		set @datademissao = @cartadatajornada
+	end
+
 	-- DECLARAÇÃO DA TABELA DE CARTÃO DE PONTO
 	DECLARE @cartaodeponto table (sem_mov_or_cc_bloq bit,escala_vinculada bit,func_ativo bit,periodoinicio datetime, periodofim datetime)
 
@@ -183,261 +188,252 @@ BEGIN
 		-- SE POSSUI ESCALA VINCULADA PARA O PERÍODO INFORMADO
 		else
 		begin
-			-- SITUAÇÃO DO FUNCIONÁRIO SE ENCONTRA DIFERENTE DE ATIVO
-			if @sit_f = 'D'
+			-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
+			/* CÓDIGO IMPLEMENTADO */
+			-- INÍCIO
+			select @leimotorista = dbo.retornarSituacaoLeiMotoristaFuncionario(@funcicodigo,@periodoiniciodatabase,@periodofimdatabase)
+			select @bancodehoras = dbo.retornarSituacaoBhFuncionario(@funcicodigo,@periodofimdatabase)
+			-- FIM
+			set @func_ativo = 1
+			declare @ctococodigo2 int = 0
+
+			-- DELETA OS CARTÕES TOTALIZADORES DE OCORRÊNCIAS
+			delete from tbgabcartaototalizador where funcicodigo = @funcicodigo and cartodatajornada = @cartadatajornada and catcartocodigo in (9,10,14,15,17,114,115)
+
+			-- RETORNAR DADOS HISTÓRICOS DO FUNCIONÁRIO	
+			select 
+			@cartacodigo = coalesce(cartacodigo,0),@horarcodigo = horarcodigo,
+			@cartadesconsiderapreassinalado = cartadesconsiderapreassinalado,
+			@ctococodigo = ctococodigo,@ctococodigooriginal = ctococodigooriginal,
+			@flagocorrencia = cartaflagocorrencia,@dia = cartadiasemana, @h_referencia=cartahorarreferencia
+			from tbgabcartaodeponto (nolock) where funcicodigo = @funcicodigo and cartadatajornada = @cartadatajornada
+			
+			if @cartacodigo <> 0 and @cartadatajornada <= @datademissao  
 			begin
-				insert into @cartaodeponto values (@mov_or_cc_bloq,@escala_vinculada,@func_ativo,NULL,NULL)
-			end
-
-			-- SE CHEGOU ATÉ AQUI, SIGNIFICA QUE NÃO HÁ NENHUM IMPEDIMENTO E O CARTÃO PODERÁ SER GERADO.
-			else
-			begin
-				-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
-				/* CÓDIGO IMPLEMENTADO */
-				-- INÍCIO
-				select @leimotorista = dbo.retornarSituacaoLeiMotoristaFuncionario(@funcicodigo,@periodoiniciodatabase,@periodofimdatabase)
-				select @bancodehoras = dbo.retornarSituacaoBhFuncionario(@funcicodigo,@periodofimdatabase)
-				-- FIM
-				set @func_ativo = 1
-				declare @ctococodigo2 int = 0
-
-				-- DELETA OS CARTÕES TOTALIZADORES DE OCORRÊNCIAS
-				delete from tbgabcartaototalizador where funcicodigo = @funcicodigo and cartodatajornada = @cartadatajornada and catcartocodigo in (9,10,14,15,17,114,115)
-
-				-- RETORNAR DADOS HISTÓRICOS DO FUNCIONÁRIO	
-				select 
-				@cartacodigo = coalesce(cartacodigo,0),@horarcodigo = horarcodigo,
-				@cartadesconsiderapreassinalado = cartadesconsiderapreassinalado,
-				@ctococodigo = ctococodigo,@ctococodigooriginal = ctococodigooriginal,
-				@flagocorrencia = cartaflagocorrencia,@dia = cartadiasemana, @h_referencia=cartahorarreferencia
-				from tbgabcartaodeponto (nolock) where funcicodigo = @funcicodigo and cartadatajornada = @cartadatajornada
+				set @cartacargahorariarealizada = NULL
+				set @carta_realizado_e1 = NULL
+				set @carta_realizado_s1 = NULL
+				set @carta_realizado_e2 = NULL
+				set @carta_realizado_s2 = NULL
+				set @carta_realizado_e3 = NULL
+				set @carta_realizado_s3 = NULL
+				set @carta_realizado_e4 = NULL
+				set @carta_realizado_s4 = NULL
 				
-				if @cartacodigo <> 0
+				-- RECUPERA O CENTRO DE CUSTO E O CARGO
+				set @centccodigo = (select dbo.retornarCentroCustoPorData(@cartadatajornada,@funcicodigo))
+				if @centccodigo <> 0
 				begin
-					set @cartacargahorariarealizada = NULL
-					set @carta_realizado_e1 = NULL
-					set @carta_realizado_s1 = NULL
-					set @carta_realizado_e2 = NULL
-					set @carta_realizado_s2 = NULL
-					set @carta_realizado_e3 = NULL
-					set @carta_realizado_s3 = NULL
-					set @carta_realizado_e4 = NULL
-					set @carta_realizado_s4 = NULL
-					
-					-- RECUPERA O CENTRO DE CUSTO E O CARGO
-					set @centccodigo = (select dbo.retornarCentroCustoPorData(@cartadatajornada,@funcicodigo))
-					if @centccodigo <> 0
-					begin
-						select top 1 @cargocodigo=cargocodigo from tbgabcentrocustofuncionario (nolock) where funcicodigo = @funcicodigo and cenfudatainicio <= @cartadatajornada order by cenfudatainicio desc
-					end
-					else
-					begin
-						set @cargocodigo = 0
-					end
-
-					--RECUPERA O ACORDO COLETIVO DE DETERMINADA DATA
-					set @acordcodigo = (select dbo.retornarAcordoPorData(@cartadatajornada,@funcicodigo))
-
-					-- VERIFICA SE O DIA É FERIADO
-					set @feriado = (select case when count(F.feriacodigo) > 0 then 1 else 0 end from tbgabcentrocusto CC (nolock) 
-									inner join tbgabtabelaferiadoferiado TF (nolock) on CC.fertbcodigo=tf.fertbcodigo
-									inner join tbgabferiado F (nolock) on TF.feriacodigo=F.feriacodigo
-									where CC.centccodigo = @centccodigo and F.feriames = @mes and F.feriadia = datepart(day,@cartadatajornada))
-
-					if @feriado > 0
-					begin
-						set @feriado = 1;
-						set @feriatipo = (select top 1 F.fertpcodigo
-						from tbgabcentrocusto CC (nolock) 
-						inner join tbgabtabelaferiadoferiado TF (nolock) on CC.fertbcodigo=tf.fertbcodigo
-						inner join tbgabferiado F (nolock) on TF.feriacodigo=F.feriacodigo
-						where CC.centccodigo = @centccodigo and F.feriames = @mes and F.feriadia = datepart(day,@cartadatajornada))
-					end
-					else
-					begin
-						set @feriado = 0;
-						set @feriatipo = '';
-					end
-						
-					-- SE NÃO HÁ ACORDO COLETIVO PARA O DIA
-					if @acordcodigo = 0
-					begin
-						-- SE A INDICAÇÃO PARA O DIA FOR <> DE TRABALHO
-						if @ctococodigo <> 1
-						begin
-							set @jornadalivre = 1
-						end
-						-- SE A INDICAÇÃO PARA O DIA FOR = TRABALHO
-						else
-						begin
-							set @jornadalivre = null
-						end
-						set @inicionoturno = null
-						set @fimnoturno = null
-						set @fatornoturno = null
-						set @estendenoturno = null
-							
-					end
-
-					-- SE HÁ ACORDO COLETIVO PARA O DIA
-					else
-					begin
-						-- VERIFICA SE O ACORDO COLETIVO PARA O DIA É JORNADA LIVRE OU NÃO
-						-- SENDO QUE SE A INDICAÇÃO FOR DIFERENTE DE TRABALHO A JORNADA SEMPRE SERÁ LIVRE
-						if @ctococodigo = 1
-						begin
-							set @jornadalivre = (select acordjornadalivre from tbgabacordocoletivo (nolock) where acordcodigo = @acordcodigo)
-						end
-						else
-						begin
-							set @jornadalivre = 1
-						end
-						select 
-						@inicionoturno=inicionoturno,
-						@fimnoturno=fimnoturno,
-						@fatornoturno=fatornoturno,
-						@estendenoturno=estendenoturno from dbo.retornarInicioFimNoturno(@acordcodigo,@cartadatajornada)
-					end
-						
-					set @nacional = 0
-					set @regional = 0
-					set @municipal = 0
-		
-					-- VERIFICA SE O DIA É FERIADO E QUAL O TIPO DE FERIADO
-					if @feriado = 1
-					begin
-						if @feriatipo = 'N' begin set @nacional = 1 end
-						if @feriatipo = 'M' begin set @municipal = 1 end
-						if @feriatipo = 'R' begin set @regional = 1 end
-					end
-					
-					-- CURSOR PARA RODAR OS APTS REALIZADOS
-					DECLARE realizadas CURSOR FOR
-					-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
-					select horarios,num,afdtgcodigo from dbo.retornarApontamentosRealizadosComPreAssinalados2(@funcicodigo,@cartadatajornada,@horarcodigo,@jornadalivre,@ctococodigo,@cartadesconsiderapreassinalado,@h_referencia,/*CÓDIGO ALTERADO*/ @leimotorista /*CÓDIGO ALTERADO*/)
-					OPEN realizadas
-					FETCH NEXT FROM realizadas INTO @aptr,@num,@afdtgcodigo
-					WHILE @@FETCH_STATUS = 0
-					BEGIN
-						 if @num = 1 begin set @carta_realizado_e1 = @aptr set @afdtgcodigo_e1 = @afdtgcodigo end
-					else if @num = 2 begin set @carta_realizado_s1 = @aptr set @afdtgcodigo_s1 = @afdtgcodigo end
-					else if @num = 3 begin set @carta_realizado_e2 = @aptr set @afdtgcodigo_e2 = @afdtgcodigo end
-					else if @num = 4 begin set @carta_realizado_s2 = @aptr set @afdtgcodigo_s2 = @afdtgcodigo end
-					else if @num = 5 begin set @carta_realizado_e3 = @aptr set @afdtgcodigo_e3 = @afdtgcodigo end
-					else if @num = 6 begin set @carta_realizado_s3 = @aptr set @afdtgcodigo_s3 = @afdtgcodigo end
-					else if @num = 7 begin set @carta_realizado_e4 = @aptr set @afdtgcodigo_e4 = @afdtgcodigo end
-					else if @num = 8 begin set @carta_realizado_s4 = @aptr set @afdtgcodigo_s4 = @afdtgcodigo end
-					FETCH NEXT FROM realizadas INTO @aptr,@num,@afdtgcodigo
-					END
-					CLOSE realizadas
-					DEALLOCATE realizadas
-						
-					-- TESTA SE O FUNCIONÁRIO É LEI DO MOTORISTA
-					if @leimotorista = 1 begin 
-						set @horaespera = (select sum(horasespera) from dbo.retornarTempoEsperaLeidoMotorista(@pis,@cartadatajornada))
-						set @horaparada = (select sum(horasparada) from dbo.retornarTempoParadaLeidoMotorista(@pis,@cartadatajornada))
-						set @horadirecao = (select sum(horasdirecao) from dbo.retornarTempoDirecaoLeidoMotorista(@pis,@cartadatajornada))
-						set @horaintervcpl = (select sum(horasintervcpl) from dbo.retornarTempoIntervCplLeidoMotorista(@pis,@cartadatajornada))
-						set @horaintervsdesc = (select sum(horasintervsemdesc) from dbo.retornarTempoIntervSemDescLeidoMotorista(@pis,@cartadatajornada))
-						set @horainterjornadacompl = (select sum(horasinterjornadacompl) from dbo.retornarTempoInterjornadaComplLeidoMotorista(@pis,@cartadatajornada))
-						set @horainterjornadacomplsdesc = (select SUM(horasinterjornadasdesc) from dbo.retornarTempoInterjornadaSemDescLeidoMotorista(@pis,@cartadatajornada))
-					end
-						
-					if @ctococodigo = 0
-					begin
-						update tbgabcartaodeponto set ctococodigooriginal = @ctococodigo2,ctococodigo = @ctococodigo2 where cartacodigo = @cartacodigo
-					end
-
-					-- ATUALIZA VALORES
-					update tbgabcartaodeponto set
-					cargocodigo = @cargocodigo,
-					acordcodigo = @acordcodigo,
-					cartaferiadonacional = @nacional,										
-					cartaferiadoregional = @regional,
-					cartaferiadomunicipal = @municipal,
-					centccodigo = @centccodigo,
-					carta_realizado_e1 = @carta_realizado_e1,
-					carta_realizado_s1 = @carta_realizado_s1,
-					carta_realizado_e2 = @carta_realizado_e2,
-					carta_realizado_s2 = @carta_realizado_s2,
-					carta_realizado_e3 = @carta_realizado_e3,
-					carta_realizado_s3 = @carta_realizado_s3,
-					carta_realizado_e4 = @carta_realizado_e4,
-					carta_realizado_s4 = @carta_realizado_s4,
-					afdtgcodigo_e1 = @afdtgcodigo_e1,
-					afdtgcodigo_s1 = @afdtgcodigo_s1,
-					afdtgcodigo_e2 = @afdtgcodigo_e2,
-					afdtgcodigo_s2 = @afdtgcodigo_s2,
-					afdtgcodigo_e3 = @afdtgcodigo_e3,
-					afdtgcodigo_s3 = @afdtgcodigo_s3,
-					afdtgcodigo_e4 = @afdtgcodigo_e4,
-					afdtgcodigo_s4 = @afdtgcodigo_s4,
-					cartainicionoturno = @inicionoturno,
-					cartafimnoturno = @fimnoturno,
-					cartafatornoturno = @fatornoturno,
-					cartaestendenoturno = @estendenoturno,
-					cartajornadalivre = @jornadalivre,
-					cartaadn = null,
-					cartaflagferiado = @feriado,
-					cartaflagocorrencia = @flagocorrencia,
-					cartasaldoanteriorbh = null,
-					cartacreditobh = null,
-					cartadebitobh = null,
-					cartasaldoatualbh = null,
-					cartaespera = @horaespera,
-					cartaparada = @horaparada,
-					cartadirecao = @horadirecao,
-					cartaintervcpl = @horaintervcpl,
-					cartaintervsdesc = @horaintervsdesc,
-					cartainterjornadacompl = @horainterjornadacompl,
-					cartainterjornadacomplsdesc = @horainterjornadacomplsdesc,
-					cartahorasextra = null,
-					--cartaprocessadopor = @usuarcodigo,
-					--cartadataultimoprocessaamento = getdate(),
-					cartadataalteracao = getdate(),
-					cartausuaralteracao = @usuarcodigo
-					where cartacodigo = @cartacodigo
-
-					-- PEGA HORA REALIZADA
-					set @cartacargahorariarealizada = (select minuto from dbo.retornarSomaHorasFuncionario(@cartacodigo))
-						
-					-- ATUALIZA HORA REALIZADA
-					update tbgabcartaodeponto set cartacargahorariarealizada = @cartacargahorariarealizada where cartacodigo = @cartacodigo
-					
-					-- INCLUI TOTALIZADORES
-					exec dbo.spug_incluirTotalizadores @acordcodigo, @funcicodigo, @cartadatajornada, 'spug_recalcularCartaodePonto_dia'
-					
-					-- ATUALIZA HORAS FALTA
-					set @cartahorasfalta = (select horasfalta from dbo.retornarSomaHorasFuncionario(@cartacodigo))
-					update tbgabcartaodeponto set cartahorasfalta = @cartahorasfalta where cartacodigo = @cartacodigo
-					
-					insert into @cartaodeponto values (
-					@mov_or_cc_bloq, -- 1
-					@escala_vinculada, -- 2
-					@func_ativo, -- 3
-					@periodoiniciodatabase, -- 4
-					@periodofimdatabase) -- 5
-
-					-- INCLUI OCORRÊNCIAS
-					exec dbo.spug_incluirOcorrencias_dia @mes,@ano, @funcicodigo,@cartadatajornada
-					-- INCLUI PERÍODOS NOTURNOS DE OCORRÊNCIAS
-					exec dbo.incluirTempoNoturnoOcorrencias_dia @funcicodigo, @mes, @ano, @cartadatajornada
-				
-					if @acordcodigo <> 0
-					begin
-						-- INCLUI, EXCLUI OU ATUALIZA OS TOTALIZADORES MENSAIS
-						exec dbo.spug_insereTotalizadoresSemanais @acordcodigo,@funcicodigo,@periodoiniciodatabase,@periodofimdatabase
-						exec dbo.spug_insereTotalizadoresMensais @acordcodigo,@funcicodigo,@periodoiniciodatabase,@periodofimdatabase
-						--exec dbo.spug_limparCartoesTotalizadores @funcicodigo, @mes, @ano, @acordcodigo 
-					end
-					if @bancodehoras = 1 
-					begin
-						exec spug_incluirSaldoBhCartaodePonto_DIA @funcicodigo,@mes,@ano,@cartadatajornada
-					end
-					-- ATUALIZAR HEADER DO CARTÃO DE PONTO
-					--exec dbo.CartaoDePontoHeader @funcicodigo,@mes,@ano
+					select top 1 @cargocodigo=cargocodigo from tbgabcentrocustofuncionario (nolock) where funcicodigo = @funcicodigo and cenfudatainicio <= @cartadatajornada order by cenfudatainicio desc
 				end
+				else
+				begin
+					set @cargocodigo = 0
+				end
+
+				--RECUPERA O ACORDO COLETIVO DE DETERMINADA DATA
+				set @acordcodigo = (select dbo.retornarAcordoPorData(@cartadatajornada,@funcicodigo))
+
+				-- VERIFICA SE O DIA É FERIADO
+				set @feriado = (select case when count(F.feriacodigo) > 0 then 1 else 0 end from tbgabcentrocusto CC (nolock) 
+								inner join tbgabtabelaferiadoferiado TF (nolock) on CC.fertbcodigo=tf.fertbcodigo
+								inner join tbgabferiado F (nolock) on TF.feriacodigo=F.feriacodigo
+								where CC.centccodigo = @centccodigo and F.feriames = @mes and F.feriadia = datepart(day,@cartadatajornada))
+
+				if @feriado > 0
+				begin
+					set @feriado = 1;
+					set @feriatipo = (select top 1 F.fertpcodigo
+					from tbgabcentrocusto CC (nolock) 
+					inner join tbgabtabelaferiadoferiado TF (nolock) on CC.fertbcodigo=tf.fertbcodigo
+					inner join tbgabferiado F (nolock) on TF.feriacodigo=F.feriacodigo
+					where CC.centccodigo = @centccodigo and F.feriames = @mes and F.feriadia = datepart(day,@cartadatajornada))
+				end
+				else
+				begin
+					set @feriado = 0;
+					set @feriatipo = '';
+				end
+					
+				-- SE NÃO HÁ ACORDO COLETIVO PARA O DIA
+				if @acordcodigo = 0
+				begin
+					-- SE A INDICAÇÃO PARA O DIA FOR <> DE TRABALHO
+					if @ctococodigo <> 1
+					begin
+						set @jornadalivre = 1
+					end
+					-- SE A INDICAÇÃO PARA O DIA FOR = TRABALHO
+					else
+					begin
+						set @jornadalivre = null
+					end
+					set @inicionoturno = null
+					set @fimnoturno = null
+					set @fatornoturno = null
+					set @estendenoturno = null
+						
+				end
+
+				-- SE HÁ ACORDO COLETIVO PARA O DIA
+				else
+				begin
+					-- VERIFICA SE O ACORDO COLETIVO PARA O DIA É JORNADA LIVRE OU NÃO
+					-- SENDO QUE SE A INDICAÇÃO FOR DIFERENTE DE TRABALHO A JORNADA SEMPRE SERÁ LIVRE
+					if @ctococodigo = 1
+					begin
+						set @jornadalivre = (select acordjornadalivre from tbgabacordocoletivo (nolock) where acordcodigo = @acordcodigo)
+					end
+					else
+					begin
+						set @jornadalivre = 1
+					end
+					select 
+					@inicionoturno=inicionoturno,
+					@fimnoturno=fimnoturno,
+					@fatornoturno=fatornoturno,
+					@estendenoturno=estendenoturno from dbo.retornarInicioFimNoturno(@acordcodigo,@cartadatajornada)
+				end
+					
+				set @nacional = 0
+				set @regional = 0
+				set @municipal = 0
+	
+				-- VERIFICA SE O DIA É FERIADO E QUAL O TIPO DE FERIADO
+				if @feriado = 1
+				begin
+					if @feriatipo = 'N' begin set @nacional = 1 end
+					if @feriatipo = 'M' begin set @municipal = 1 end
+					if @feriatipo = 'R' begin set @regional = 1 end
+				end
+				
+				-- CURSOR PARA RODAR OS APTS REALIZADOS
+				DECLARE realizadas CURSOR FOR
+				-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
+				select horarios,num,afdtgcodigo from dbo.retornarApontamentosRealizadosComPreAssinalados2(@funcicodigo,@cartadatajornada,@horarcodigo,@jornadalivre,@ctococodigo,@cartadesconsiderapreassinalado,@h_referencia,/*CÓDIGO ALTERADO*/ @leimotorista /*CÓDIGO ALTERADO*/)
+				OPEN realizadas
+				FETCH NEXT FROM realizadas INTO @aptr,@num,@afdtgcodigo
+				WHILE @@FETCH_STATUS = 0
+				BEGIN
+						if @num = 1 begin set @carta_realizado_e1 = @aptr set @afdtgcodigo_e1 = @afdtgcodigo end
+				else if @num = 2 begin set @carta_realizado_s1 = @aptr set @afdtgcodigo_s1 = @afdtgcodigo end
+				else if @num = 3 begin set @carta_realizado_e2 = @aptr set @afdtgcodigo_e2 = @afdtgcodigo end
+				else if @num = 4 begin set @carta_realizado_s2 = @aptr set @afdtgcodigo_s2 = @afdtgcodigo end
+				else if @num = 5 begin set @carta_realizado_e3 = @aptr set @afdtgcodigo_e3 = @afdtgcodigo end
+				else if @num = 6 begin set @carta_realizado_s3 = @aptr set @afdtgcodigo_s3 = @afdtgcodigo end
+				else if @num = 7 begin set @carta_realizado_e4 = @aptr set @afdtgcodigo_e4 = @afdtgcodigo end
+				else if @num = 8 begin set @carta_realizado_s4 = @aptr set @afdtgcodigo_s4 = @afdtgcodigo end
+				FETCH NEXT FROM realizadas INTO @aptr,@num,@afdtgcodigo
+				END
+				CLOSE realizadas
+				DEALLOCATE realizadas
+					
+				-- TESTA SE O FUNCIONÁRIO É LEI DO MOTORISTA
+				if @leimotorista = 1 begin 
+					set @horaespera = (select sum(horasespera) from dbo.retornarTempoEsperaLeidoMotorista(@pis,@cartadatajornada))
+					set @horaparada = (select sum(horasparada) from dbo.retornarTempoParadaLeidoMotorista(@pis,@cartadatajornada))
+					set @horadirecao = (select sum(horasdirecao) from dbo.retornarTempoDirecaoLeidoMotorista(@pis,@cartadatajornada))
+					set @horaintervcpl = (select sum(horasintervcpl) from dbo.retornarTempoIntervCplLeidoMotorista(@pis,@cartadatajornada))
+					set @horaintervsdesc = (select sum(horasintervsemdesc) from dbo.retornarTempoIntervSemDescLeidoMotorista(@pis,@cartadatajornada))
+					set @horainterjornadacompl = (select sum(horasinterjornadacompl) from dbo.retornarTempoInterjornadaComplLeidoMotorista(@pis,@cartadatajornada))
+					set @horainterjornadacomplsdesc = (select SUM(horasinterjornadasdesc) from dbo.retornarTempoInterjornadaSemDescLeidoMotorista(@pis,@cartadatajornada))
+				end
+					
+				if @ctococodigo = 0
+				begin
+					update tbgabcartaodeponto set ctococodigooriginal = @ctococodigo2,ctococodigo = @ctococodigo2 where cartacodigo = @cartacodigo
+				end
+
+				-- ATUALIZA VALORES
+				update tbgabcartaodeponto set
+				cargocodigo = @cargocodigo,
+				acordcodigo = @acordcodigo,
+				cartaferiadonacional = @nacional,										
+				cartaferiadoregional = @regional,
+				cartaferiadomunicipal = @municipal,
+				centccodigo = @centccodigo,
+				carta_realizado_e1 = @carta_realizado_e1,
+				carta_realizado_s1 = @carta_realizado_s1,
+				carta_realizado_e2 = @carta_realizado_e2,
+				carta_realizado_s2 = @carta_realizado_s2,
+				carta_realizado_e3 = @carta_realizado_e3,
+				carta_realizado_s3 = @carta_realizado_s3,
+				carta_realizado_e4 = @carta_realizado_e4,
+				carta_realizado_s4 = @carta_realizado_s4,
+				afdtgcodigo_e1 = @afdtgcodigo_e1,
+				afdtgcodigo_s1 = @afdtgcodigo_s1,
+				afdtgcodigo_e2 = @afdtgcodigo_e2,
+				afdtgcodigo_s2 = @afdtgcodigo_s2,
+				afdtgcodigo_e3 = @afdtgcodigo_e3,
+				afdtgcodigo_s3 = @afdtgcodigo_s3,
+				afdtgcodigo_e4 = @afdtgcodigo_e4,
+				afdtgcodigo_s4 = @afdtgcodigo_s4,
+				cartainicionoturno = @inicionoturno,
+				cartafimnoturno = @fimnoturno,
+				cartafatornoturno = @fatornoturno,
+				cartaestendenoturno = @estendenoturno,
+				cartajornadalivre = @jornadalivre,
+				cartaadn = null,
+				cartaflagferiado = @feriado,
+				cartaflagocorrencia = @flagocorrencia,
+				cartasaldoanteriorbh = null,
+				cartacreditobh = null,
+				cartadebitobh = null,
+				cartasaldoatualbh = null,
+				cartaespera = @horaespera,
+				cartaparada = @horaparada,
+				cartadirecao = @horadirecao,
+				cartaintervcpl = @horaintervcpl,
+				cartaintervsdesc = @horaintervsdesc,
+				cartainterjornadacompl = @horainterjornadacompl,
+				cartainterjornadacomplsdesc = @horainterjornadacomplsdesc,
+				cartahorasextra = null,
+				--cartaprocessadopor = @usuarcodigo,
+				--cartadataultimoprocessaamento = getdate(),
+				cartadataalteracao = getdate(),
+				cartausuaralteracao = @usuarcodigo
+				where cartacodigo = @cartacodigo
+
+				-- PEGA HORA REALIZADA
+				set @cartacargahorariarealizada = (select minuto from dbo.retornarSomaHorasFuncionario(@cartacodigo))
+					
+				-- ATUALIZA HORA REALIZADA
+				update tbgabcartaodeponto set cartacargahorariarealizada = @cartacargahorariarealizada where cartacodigo = @cartacodigo
+				
+				-- INCLUI TOTALIZADORES
+				exec dbo.spug_incluirTotalizadores @acordcodigo, @funcicodigo, @cartadatajornada, 'spug_recalcularCartaodePonto_dia'
+				
+				-- ATUALIZA HORAS FALTA
+				set @cartahorasfalta = (select horasfalta from dbo.retornarSomaHorasFuncionario(@cartacodigo))
+				update tbgabcartaodeponto set cartahorasfalta = @cartahorasfalta where cartacodigo = @cartacodigo
+				
+				insert into @cartaodeponto values (
+				@mov_or_cc_bloq, -- 1
+				@escala_vinculada, -- 2
+				@func_ativo, -- 3
+				@periodoiniciodatabase, -- 4
+				@periodofimdatabase) -- 5
+
+				-- INCLUI OCORRÊNCIAS
+				exec dbo.spug_incluirOcorrencias_dia @mes,@ano, @funcicodigo,@cartadatajornada
+				-- INCLUI PERÍODOS NOTURNOS DE OCORRÊNCIAS
+				exec dbo.incluirTempoNoturnoOcorrencias_dia @funcicodigo, @mes, @ano, @cartadatajornada
+			
+				if @acordcodigo <> 0
+				begin
+					-- INCLUI, EXCLUI OU ATUALIZA OS TOTALIZADORES MENSAIS
+					exec dbo.spug_insereTotalizadoresSemanais @acordcodigo,@funcicodigo,@periodoiniciodatabase,@periodofimdatabase
+					exec dbo.spug_insereTotalizadoresMensais @acordcodigo,@funcicodigo,@periodoiniciodatabase,@periodofimdatabase
+					--exec dbo.spug_limparCartoesTotalizadores @funcicodigo, @mes, @ano, @acordcodigo 
+				end
+				if @bancodehoras = 1 
+				begin
+					exec spug_incluirSaldoBhCartaodePonto_DIA @funcicodigo,@mes,@ano,@cartadatajornada
+				end
+				-- ATUALIZAR HEADER DO CARTÃO DE PONTO
+				--exec dbo.CartaoDePontoHeader @funcicodigo,@mes,@ano
 			end
+			
 		end
 	end
 	

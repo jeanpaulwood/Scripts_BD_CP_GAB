@@ -24,7 +24,7 @@ GO
 -- alter date: 23/08/2019
 -- 1º Implementado a SP que atualiza o saldo e o saldo anterior do funcionário no CP
 -- =============================================
-CREATE PROCEDURE [dbo].[spug_recalcularCartaodePonto] 
+ALTER PROCEDURE [dbo].[spug_recalcularCartaodePonto] 
 	-- Add the parameters for the function here
 	@funcicodigo int,@mes smallint, @ano int, @usuarcodigo int
 AS
@@ -134,13 +134,13 @@ BEGIN
 	@horainterjornadacomplsdesc int = NULL,
 	@leimotorista bit , -- INFORMA SE FUNCIONÁRIO É OU NÃO LEI DO MOTORISTA
 	-- INFORMA SE FUNCIONÁRIO É OU NÃO BANCO DE HORAS BASEADO NO DADO HISTÓRICO. ALTERAÇÃO FEITA EM 01/06/2020 POR JEAN PAUL.
-	@bancodehoras bit /*= dbo.retornarSituacaoBhFuncionario(@funcicodigo,EOMONTH(convert(varchar(4),@ano)+'-'+convert(varchar,@mes)+'-01'))*/,
+	@bancodehoras bit,
 	@compljornada int, -- INFORMA SE EVENTO COMPLEMENTA OU NÃO A JORNADA DO DIA
 	@contjornada int,
 	@afdtgcodigo int, @afdtgcodigo_e1 int,@afdtgcodigo_s1 int,@afdtgcodigo_e2 int,@afdtgcodigo_s2 int,@afdtgcodigo_e3 int,@afdtgcodigo_s3 int,@afdtgcodigo_e4 int,@afdtgcodigo_s4 int,
-	@cartadesconsiderapreassinalado bit, @h_referencia smallint
+	@cartadesconsiderapreassinalado bit, @h_referencia smallint, @datademissao datetime
 	
-	select @sit_f = funcscodigo, @pis = funcipis /*,@leimotorista = coalesce(funcileimotorista,0)*/ from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
+	select @pis = funcipis, @datademissao = funcidatademissao from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
 	
 	-- DECLARAÇÃO DA TABELA DE CARTÃO DE PONTO
 	DECLARE @cartaodeponto table (sem_mov_or_cc_bloq bit,escala_vinculada bit,func_ativo bit,periodoinicio datetime, periodofim datetime)
@@ -180,15 +180,10 @@ BEGIN
 		-- SE POSSUI ESCALA VINCULADA PARA O PERÍODO INFORMADO
 		else
 		begin
-			-- SITUAÇÃO DO FUNCIONÁRIO SE ENCONTRA DIFERENTE DE ATIVO
-			if @sit_f = 'D'
-			begin
-				insert into @cartaodeponto values (@mov_or_cc_bloq,@escala_vinculada,@func_ativo,NULL,NULL)
-			end
-
-			-- SE CHEGOU ATÉ AQUI, SIGNIFICA QUE NÃO HÁ NENHUM IMPEDIMENTO E O CARTÃO PODERÁ SER GERADO.
-			else
-			begin
+				if (coalesce(@datademissao,'1900-01-01 00:00:00.000') = '1900-01-01 00:00:00.000')
+				begin
+					set @datademissao = @periodofimdatabase
+				end
 				-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
 				/* CÓDIGO IMPLEMENTADO */
 				-- INÍCIO
@@ -217,6 +212,7 @@ BEGIN
 				flagocorrencia
 				from dbo.retornarDadosHistoricosFuncionario(@funcicodigo,@periodoiniciodatabase,@periodofimdatabase)
 				left join tbgabcartaoocorrencia CO (nolock) on dbo.retornarDadosHistoricosFuncionario.indicacao=CO.ctocodescricao
+				where dt <= @datademissao
 				open dados_historicos
 				fetch next from dados_historicos 
 				into @dia,@dt,@codigo_h,@indicacao,@cod_escala,@ctococodigo,@centccodigo,@feriado,@feriatipo,@acordcodigo,@cargocodigo,@tpapocodigo,@flagocorrencia
@@ -521,7 +517,6 @@ BEGIN
 				if @bancodehoras = 1 begin exec spug_incluirSaldoBhCartaodePonto @funcicodigo,@mes,@ano end
 				-- ATUALIZA O HEADER DO CARTÃO DE PONTO
 				--exec dbo.CartaoDePontoHeader @funcicodigo,@mes,@ano
-			end
 		end
 	end
 
