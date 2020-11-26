@@ -214,7 +214,7 @@ BEGIN
 			while @@FETCH_STATUS=0
 			begin
 				set @cartacodigo = null
-				select @cartacodigo=cartacodigo from tbgabcartaodeponto (nolock) where cartadatajornada = @dt and funcicodigo = @funcicodigo
+				select @cartacodigo=cartacodigo from tbgabcartaodeponto where cartadatajornada = @dt and funcicodigo = @funcicodigo
 				set @cartacargahorariarealizada = NULL
 				set @cartacargahoraria = NULL
 				set @carta_realizado_e1 = NULL
@@ -375,7 +375,6 @@ BEGIN
 					try
 						-- INSERE
 						insert into tbgabcartaodeponto (
-						cartacodigo,
 						cartadatajornada,
 						cargocodigo,
 						ctococodigo,
@@ -447,7 +446,6 @@ BEGIN
 						cartausuaralteracao,cartadataalteracao,cartahorarreferencia
 						) 
 						values (
-						(select coalesce(max(cartacodigo)+1,1) from tbgabcartaodeponto (nolock)),
 						@dt,
 						@cargocodigo,
 						@ctococodigo,
