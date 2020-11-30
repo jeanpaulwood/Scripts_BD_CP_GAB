@@ -137,10 +137,11 @@ BEGIN
 	@bancodehoras bit,
 	@compljornada int, -- INFORMA SE EVENTO COMPLEMENTA OU NÃO A JORNADA DO DIA
 	@contjornada int,
+	@dataadmissao datetime,
 	@afdtgcodigo int, @afdtgcodigo_e1 int,@afdtgcodigo_s1 int,@afdtgcodigo_e2 int,@afdtgcodigo_s2 int,@afdtgcodigo_e3 int,@afdtgcodigo_s3 int,@afdtgcodigo_e4 int,@afdtgcodigo_s4 int,
 	@cartadesconsiderapreassinalado bit, @h_referencia smallint, @datademissao datetime
 	
-	select @pis = funcipis, @datademissao = funcidatademissao from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
+	select @pis = funcipis, @datademissao = funcidatademissao, @dataadmissao = funcidataadmissao from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
 	
 	-- DECLARAÇÃO DA TABELA DE CARTÃO DE PONTO
 	DECLARE @cartaodeponto table (sem_mov_or_cc_bloq bit,escala_vinculada bit,func_ativo bit,periodoinicio datetime, periodofim datetime)
@@ -212,7 +213,7 @@ BEGIN
 				flagocorrencia
 				from dbo.retornarDadosHistoricosFuncionario(@funcicodigo,@periodoiniciodatabase,@periodofimdatabase)
 				left join tbgabcartaoocorrencia CO (nolock) on dbo.retornarDadosHistoricosFuncionario.indicacao=CO.ctocodescricao
-				where dt <= @datademissao
+				where dt <= @datademissao and dt >= @dataadmissao
 				open dados_historicos
 				fetch next from dados_historicos 
 				into @dia,@dt,@codigo_h,@indicacao,@cod_escala,@ctococodigo,@centccodigo,@feriado,@feriatipo,@acordcodigo,@cargocodigo,@tpapocodigo,@flagocorrencia

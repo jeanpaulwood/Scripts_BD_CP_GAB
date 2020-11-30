@@ -173,7 +173,8 @@ BEGIN
 		-- SE POSSUI ESCALA VINCULADA PARA O PERÍODO INFORMADO
 		else
 		begin
-			declare @datademissao datetime = (select top 1 funcidatademissao from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo)
+			declare @datademissao datetime, @dataadmissao datetime  
+			select top 1 @datademissao=funcidatademissao,@dataadmissao=coalesce(funcidataadmissao,'1900-01-01') from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
 
 			-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
 			/* CÓDIGO IMPLEMENTADO */
@@ -207,7 +208,7 @@ BEGIN
 			flagocorrencia
 			from dbo.retornarDadosHistoricosFuncionario(@funcicodigo,@periodoiniciodatabase,@periodofimdatabase)
 			left join tbgabcartaoocorrencia CO (nolock) on dbo.retornarDadosHistoricosFuncionario.indicacao=CO.ctocodescricao
-			where dt <= @datademissao
+			where dt <= @datademissao and dt >= @dataadmissao
 			open dados_historicos
 			fetch next from dados_historicos 
 			into @dia,@dt,@codigo_h,@indicacao,@cod_escala,@ctococodigo,@centccodigo,@feriado,@feriatipo,@acordcodigo,@cargocodigo,@tpapocodigo,@flagocorrencia

@@ -138,12 +138,13 @@ BEGIN
 	@leimotorista bit, -- INFORMA SE FUNCIONÁRIO É OU NÃO LEI DO MOTORISTA
 	-- INFORMA SE FUNCIONÁRIO É OU NÃO BANCO DE HORAS BASEADO NO DADO HISTÓRICO. ALTERAÇÃO FEITA EM 01/06/2020 POR JEAN PAUL.
 	@bancodehoras bit,
+	@dataadmissao datetime,
 	@compljornada int, -- INFORMA SE EVENTO COMPLEMENTA OU NÃO A JORNADA DO DIA
 	@contjornada int,
 	@afdtgcodigo int, @afdtgcodigo_e1 int,@afdtgcodigo_s1 int,@afdtgcodigo_e2 int,@afdtgcodigo_s2 int,@afdtgcodigo_e3 int,@afdtgcodigo_s3 int,@afdtgcodigo_e4 int,@afdtgcodigo_s4 int,
 	@cartadesconsiderapreassinalado bit, @ctococodigooriginal smallint, @h_referencia smallint, @datademissao datetime
 
-	select @pis = funcipis, @datademissao = funcidatademissao from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
+	select @pis = funcipis, @datademissao = funcidatademissao, @dataadmissao = funcidataadmissao from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
 	
 	if (coalesce(@datademissao,'1900-01-01 00:00:00.000') = '1900-01-01 00:00:00.000')
 	begin
@@ -208,7 +209,7 @@ BEGIN
 			@flagocorrencia = cartaflagocorrencia,@dia = cartadiasemana, @h_referencia=cartahorarreferencia
 			from tbgabcartaodeponto (nolock) where funcicodigo = @funcicodigo and cartadatajornada = @cartadatajornada
 			
-			if @cartacodigo <> 0 and @cartadatajornada <= @datademissao  
+			if @cartacodigo <> 0 and @cartadatajornada <= @datademissao and @cartadatajornada >= @dataadmissao
 			begin
 				set @cartacargahorariarealizada = NULL
 				set @carta_realizado_e1 = NULL

@@ -98,10 +98,11 @@ BEGIN
 	@leimotorista bit,
 	-- INFORMA SE FUNCIONÁRIO É OU NÃO BANCO DE HORAS BASEADO NO DADO HISTÓRICO. ALTERAÇÃO FEITA EM 01/06/2020 POR JEAN PAUL.
 	@bancodehoras bit,
+	@dataadmissao datetime,
 	@afdtgcodigo int, @afdtgcodigo_e1 int,@afdtgcodigo_s1 int,@afdtgcodigo_e2 int,@afdtgcodigo_s2 int,@afdtgcodigo_e3 int,@afdtgcodigo_s3 int,@afdtgcodigo_e4 int,@afdtgcodigo_s4 int,
 	@cartadesconsiderapreassinalado bit, @ctococodigooriginal smallint, @h_referencia smallint, @datademissao datetime
 
-	select @pis = funcipis, @datademissao = funcidatademissao from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
+	select @pis = funcipis, @datademissao = funcidatademissao, @dataadmissao = coalesce(funcidataadmissao,'1900-01-01') from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
 	
 	-- DECLARAÇÃO DA TABELA DE CARTÃO DE PONTO
 	DECLARE @cartaodeponto table (sem_mov_or_cc_bloq bit,escala_vinculada bit,func_ativo bit,periodoinicio datetime, periodofim datetime)
@@ -169,7 +170,7 @@ BEGIN
 				select cartacodigo,horarcodigo,cartadesconsiderapreassinalado,ctococodigo,ctococodigooriginal,cartadatajornada,cartaflagocorrencia,cartadiasemana,cartahorarreferencia
 				from tbgabcartaodeponto (nolock) 
 				where funcicodigo = @funcicodigo and cartadatajornada between @periodoiniciodatabase and @periodofimdatabase 
-				and cartadatajornada <= @datademissao
+				and cartadatajornada <= @datademissao and cartadatajornada >= @dataadmissao
 				open dados_historicos
 				fetch next from dados_historicos 
 				into @cartacodigo,@horarcodigo,@cartadesconsiderapreassinalado,@ctococodigo,@ctococodigooriginal,@dt,@flagocorrencia,@dia,@h_referencia
