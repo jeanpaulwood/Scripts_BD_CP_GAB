@@ -190,9 +190,11 @@ BEGIN
 
 			set @func_ativo = 1
 			delete from tbgabcartaototalizador where funcicodigo = @funcicodigo and cartomesbase = @mes and cartoanobase = @ano and catcartocodigo in (9,10,14,15,17,114,115)
+			
 			-- RETORNAR DADOS HISTÓRICOS DO FUNCIONÁRIO	
-			declare dados_historicos cursor for
-			select	
+			declare @dados_historicos table (pk int, dia int, dt datetime, codigo_h int, indicacao char(20), cod_escala int, ctococodigo int, centccodigo int, feriado bit, feriatipo char(1), acordcodigo int, cargocodigo int, tpapocodigo int, flagocorrencia bit)
+			insert into @dados_historicos  select	
+			ROW_NUMBER () OVER (ORDER BY dt),
 			dia,
 			dt,
 			coalesce(codigo_h,0),	
@@ -209,13 +211,15 @@ BEGIN
 			from dbo.retornarDadosHistoricosFuncionario(@funcicodigo,@periodoiniciodatabase,@periodofimdatabase)
 			left join tbgabcartaoocorrencia CO (nolock) on dbo.retornarDadosHistoricosFuncionario.indicacao=CO.ctocodescricao
 			where dt <= @datademissao and dt >= @dataadmissao
-			open dados_historicos
-			fetch next from dados_historicos 
-			into @dia,@dt,@codigo_h,@indicacao,@cod_escala,@ctococodigo,@centccodigo,@feriado,@feriatipo,@acordcodigo,@cargocodigo,@tpapocodigo,@flagocorrencia
-			while @@FETCH_STATUS=0
+
+			declare @pk int = 1, @totalRows int = (select count(dia) from @dados_historicos)
+			while @pk <= @totalRows
 			begin
+				select @dia=dia,@dt=dt,@codigo_h=codigo_h,@indicacao=indicacao,@cod_escala=cod_escala,@ctococodigo=ctococodigo,@centccodigo=centccodigo,@feriado=feriado,@feriatipo=feriatipo,@acordcodigo=acordcodigo,@cargocodigo=cargocodigo,@tpapocodigo=tpapocodigo,@flagocorrencia=flagocorrencia
+				from @dados_historicos where pk = @pk
+
 				set @cartacodigo = null
-				select @cartacodigo=cartacodigo from tbgabcartaodeponto where cartadatajornada = @dt and funcicodigo = @funcicodigo
+				set @cartacodigo = (select top 1 cartacodigo from tbgabcartaodeponto where cartadatajornada = @dt and funcicodigo = @funcicodigo)
 				set @cartacargahorariarealizada = NULL
 				set @cartacargahoraria = NULL
 				set @carta_realizado_e1 = NULL
@@ -339,10 +343,10 @@ BEGIN
 
 					-- SE HÁ CONFLITO DE ESCALAS, MUDA A REFERÊNCIA DE HORÁRIO
 					if dbo.retornarConflitoEscala(@dt,@funcicodigo,@carta_previsto_e1) = 1 begin set @h_referencia = 2 end else begin set @h_referencia = 1 end
-
+					
 					-- CURSOR PARA RODAR OS APTS REALIZADOS
 					DECLARE realizadas CURSOR FOR
-					-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
+					-- ALTERAÇÃO 12/06/2020. ID DA DEMANDA: 36
 					select horarios,num,afdtgcodigo from dbo.retornarApontamentosRealizadosComPreAssinalados2(@funcicodigo,@dt,@codigo_h,@jornadalivre,@ctococodigo,0,@h_referencia,/* CÓDIGO ALTERADO */@leimotorista/* CÓDIGO ALTERADO */)
 					OPEN realizadas
 					FETCH NEXT FROM realizadas INTO @aptr,@num,@afdtgcodigo
@@ -362,7 +366,8 @@ BEGIN
 					DEALLOCATE realizadas
 
 					-- TESTA SE O FUNCIONÁRIO É LEI DO MOTORISTA
-					if @leimotorista = 1 begin 
+					if @leimotorista = 1 
+					begin 
 						set @horaespera = (select sum(horasespera) from dbo.retornarTempoEsperaLeidoMotorista(@pis,@dt))
 						set @horaparada = (select sum(horasparada) from dbo.retornarTempoParadaLeidoMotorista(@pis,@dt))
 						set @horadirecao = (select sum(horasdirecao) from dbo.retornarTempoDirecaoLeidoMotorista(@pis,@dt))
@@ -443,8 +448,7 @@ BEGIN
 						cartaintervsdesc,
 						cartainterjornadacompl,
 						cartainterjornadacomplsdesc,
-						afdtgcodigo_e1,afdtgcodigo_s1,afdtgcodigo_e2,afdtgcodigo_s2,afdtgcodigo_e3,afdtgcodigo_s3,afdtgcodigo_e4,afdtgcodigo_s4,
-						cartausuaralteracao,cartadataalteracao,cartahorarreferencia
+						afdtgcodigo_e1,afdtgcodigo_s1,afdtgcodigo_e2,afdtgcodigo_s2,afdtgcodigo_e3,afdtgcodigo_s3,afdtgcodigo_e4,afdtgcodigo_s4,cartahorarreferencia
 						) 
 						values (
 						@dt,
@@ -513,11 +517,9 @@ BEGIN
 						@horaintervcpl,
 						@horaintervsdesc,
 						@horainterjornadacompl,
-						@horainterjornadacomplsdesc,@afdtgcodigo_e1,@afdtgcodigo_s1,@afdtgcodigo_e2,@afdtgcodigo_s2,@afdtgcodigo_e3,@afdtgcodigo_s3,@afdtgcodigo_e4,@afdtgcodigo_s4,
-						@usuarcodigo,getdate(),@h_referencia)
-			
-						set @cartacodigo = (select cartacodigo from tbgabcartaodeponto (nolock) where funcicodigo = @funcicodigo and cartadatajornada = @dt)
+						@horainterjornadacomplsdesc,@afdtgcodigo_e1,@afdtgcodigo_s1,@afdtgcodigo_e2,@afdtgcodigo_s2,@afdtgcodigo_e3,@afdtgcodigo_s3,@afdtgcodigo_e4,@afdtgcodigo_s4,@h_referencia)
 
+						set @cartacodigo = (select cartacodigo from tbgabcartaodeponto (nolock) where funcicodigo = @funcicodigo and cartadatajornada = @dt)
 						-- PEGA HORA REALIZADA
 						set @cartacargahorariarealizada = (select minuto from dbo.retornarSomaHorasFuncionario(@cartacodigo))
 
@@ -543,17 +545,16 @@ BEGIN
 					end try
 					begin catch
 						insert into tbgabduplicados (funcicodigo,datajornada,rotina_origem,usuarcadastro,error)
-						values (@funcicodigo,@dt,'spug_gerarCartaodePonto_background',@usuarcodigo,ERROR_MESSAGE())
+						values (@funcicodigo,@dt,'spug_gerarCartaodePonto_background_insert',@usuarcodigo,ERROR_MESSAGE())
 					end catch;
 				end 
 				
 				-- VERIFICA SE JÁ EXISTE UM REGISTRO PARA O DIA CORRENTE
 				else
 				begin
-					
-					select top 1 @horarcodigo=horarcodigo,@cartadesconsiderapreassinalado=cartadesconsiderapreassinalado,@h_referencia=cartahorarreferencia 
-					from tbgabcartaodeponto (nolock) where cartacodigo = @cartacodigo
-					
+					-- CHAVE PRIMÁRIA DA TABELA CARTÃO DE PONTO
+					select top 1 @horarcodigo=horarcodigo,@cartadesconsiderapreassinalado=cartadesconsiderapreassinalado,@h_referencia=cartahorarreferencia from tbgabcartaodeponto (nolock) where cartacodigo = @cartacodigo
+
 					-- SE NÃO HÁ ACORDO COLETIVO PARA O DIA
 					if @acordcodigo = 0
 					begin
@@ -594,9 +595,9 @@ BEGIN
 						@estendenoturno=estendenoturno from dbo.retornarInicioFimNoturno(@acordcodigo,@dt)
 						set @cartaadn = 0
 					end
-					
+
 					-- CONTADOR DE APONTAMENTOS NA TABELA DE AFDT
-					-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
+					-- ALTERAÇÃO 12/06/2020. ID DA DEMANDA: 36
 					set @contadorafd = (select count(horarios) from dbo.retornarApontamentosRealizadosComPreAssinalados2(@funcicodigo,@dt,@horarcodigo,@jornadalivre,@ctococodigo,@cartadesconsiderapreassinalado,@h_referencia,/* CÓDIGO ALTERADO */@leimotorista/* CÓDIGO ALTERADO */))
 					
 					-- CONTADOR DE APONTAMENTOS N TABELA DE CARTÃO DE PONTO
@@ -608,8 +609,8 @@ BEGIN
 													(case when (carta_realizado_s3 is not null) then 1 else 0 end ) +
 													(case when (carta_realizado_e4 is not null) then 1 else 0 end ) + 
 													(case when (carta_realizado_s4 is not null) then 1 else 0 end ))
-													from tbgabcartaodeponto (nolock) where cartacodigo = @cartacodigo)
-
+													from tbgabcartaodeponto (nolock) where cartadatajornada = @dt and funcicodigo = @funcicodigo)
+					
 					-- SE HÁ NOVOS APONTAMENTOS NA TABELA DE AFDT
 					if @contadorafd <> @contadorcartaodeponto or @flagocorrencia = 1
 					begin
@@ -625,36 +626,9 @@ BEGIN
 							if @feriatipo = 'R' begin set @regional = 1 end
 						end
 
-						/*select 
-						@cartacargahoraria=horarcargahoraria,
-						@carta_tolerancia_anterior_e1=horartoleranciaanteriorentrada1,
-						@carta_tolerancia_anterior_s1=horartoleranciaanteriorsaida1,
-						@carta_tolerancia_posterior_e1=horartoleranciaposteriorentrada1,
-						@carta_tolerancia_posterior_s1=horartoleranciaposteriorsaida1,
-						@carta_tolerancia_anterior_e2=horartoleranciaanteriorentrada2,
-						@carta_tolerancia_anterior_s2=horartoleranciaanteriorsaida2,
-						@carta_tolerancia_posterior_e2=horartoleranciaposteriorentrada2,
-						@carta_tolerancia_posterior_s2=horartoleranciaposteriorsaida2,
-						@carta_tolerancia_anterior_e3=horartoleranciaanteriorentrada3,
-						@carta_tolerancia_anterior_s3=horartoleranciaanteriorsaida3,
-						@carta_tolerancia_posterior_e3=horartoleranciaposteriorentrada3,
-						@carta_tolerancia_posterior_s3=horartoleranciaposteriorsaida3,
-						@carta_tolerancia_anterior_e4=horartoleranciaanteriorentrada4,
-						@carta_tolerancia_anterior_s4=horartoleranciaanteriorsaida4,
-						@carta_tolerancia_posterior_e4=horartoleranciaposteriorentrada4,
-						@carta_tolerancia_posterior_s4=horartoleranciaposteriorsaida4
-						from tbgabhorario (nolock) where horarcodigo = @horarcodigo*/
-
-						/*select 
-						@carta_previsto_e1=e1,@carta_previsto_s1=s1,
-						@carta_previsto_e2=e2,@carta_previsto_s2=s2,
-						@carta_previsto_e3=e3,@carta_previsto_s3=s3,
-						@carta_previsto_e4=e4,@carta_previsto_s4=s4 
-						from dbo.retornarHorariosPrevistos(@horarcodigo,@dt)*/
-
 						-- CURSOR PARA RODAR OS APTS REALIZADOS
 						DECLARE realizadas CURSOR FOR
-						-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
+						-- ALTERAÇÃO 12/06/2020. ID DA DEMANDA: 36
 						select horarios,num,afdtgcodigo from dbo.retornarApontamentosRealizadosComPreAssinalados2(@funcicodigo,@dt,@horarcodigo,@jornadalivre,@ctococodigo,@cartadesconsiderapreassinalado,@h_referencia,/* CÓDIGO ALTERADO */@leimotorista/* CÓDIGO ALTERADO */)
 						OPEN realizadas
 						FETCH NEXT FROM realizadas INTO @aptr,@num,@afdtgcodigo
@@ -672,10 +646,9 @@ BEGIN
 						END
 						CLOSE realizadas
 						DEALLOCATE realizadas
-
+							
 						-- TESTA SE O FUNCIONÁRIO É LEI DO MOTORISTA
-						if @leimotorista = 1 
-						begin 
+						if @leimotorista = 1 begin 
 							set @horaespera = (select sum(horasespera) from dbo.retornarTempoEsperaLeidoMotorista(@pis,@dt))
 							set @horaparada = (select sum(horasparada) from dbo.retornarTempoParadaLeidoMotorista(@pis,@dt))
 							set @horadirecao = (select sum(horasdirecao) from dbo.retornarTempoDirecaoLeidoMotorista(@pis,@dt))
@@ -690,17 +663,6 @@ BEGIN
 						cargocodigo = @cargocodigo,
 						funcicodigo = @funcicodigo,
 						acordcodigo = @acordcodigo,
-						--horarcodigo = @codigo_h,
-						--ctococodigo = @ctococodigo,
-						--cartacargahoraria = @cartacargahoraria,
-						--carta_previsto_e1 = @carta_previsto_e1,
-						--carta_previsto_s1 = @carta_previsto_s1,
-						--carta_previsto_e2 = @carta_previsto_e2,
-						--carta_previsto_s2 = @carta_previsto_s2,
-						--carta_previsto_e3 = @carta_previsto_e3,
-						--carta_previsto_s3 = @carta_previsto_s3,
-						--carta_previsto_e4 = @carta_previsto_e4,
-						--carta_previsto_s4 = @carta_previsto_s4,
 						cartaferiadonacional = @nacional,										
 						cartaferiadoregional = @regional,
 						cartaferiadomunicipal = @municipal,
@@ -729,22 +691,6 @@ BEGIN
 						cartaestendenoturno = @estendenoturno,
 						cartajornadalivre = @jornadalivre,
 						cartaadn = @cartaadn,
-						--carta_tolerancia_anterior_e1 = @carta_tolerancia_anterior_e1,
-						--carta_tolerancia_posterior_e1 = @carta_tolerancia_posterior_e1,
-						--carta_tolerancia_anterior_s1 = @carta_tolerancia_anterior_s1,
-						--carta_tolerancia_posterior_s1 = @carta_tolerancia_posterior_s1,
-						--carta_tolerancia_anterior_e2 = @carta_tolerancia_anterior_e2,
-						--carta_tolerancia_posterior_e2 = @carta_tolerancia_posterior_e2,
-						--carta_tolerancia_anterior_s2 = @carta_tolerancia_anterior_s2,
-						--carta_tolerancia_posterior_s2 = @carta_tolerancia_posterior_s2,
-						--carta_tolerancia_anterior_e3 = @carta_tolerancia_anterior_e3,
-						--carta_tolerancia_posterior_e3 = @carta_tolerancia_posterior_e3,
-						--carta_tolerancia_anterior_s3 = @carta_tolerancia_anterior_s3,
-						--carta_tolerancia_posterior_s3 = @carta_tolerancia_posterior_s3,
-						--carta_tolerancia_anterior_e4 = @carta_tolerancia_anterior_e4,
-						--carta_tolerancia_posterior_e4 = @carta_tolerancia_posterior_e4,
-						--carta_tolerancia_anterior_s4 = @carta_tolerancia_anterior_s4,
-						--carta_tolerancia_posterior_s4 = @carta_tolerancia_posterior_s4,
 						cartaflagferiado = @feriado,
 						cartaflagocorrencia = @flagocorrencia,
 						cartasaldoanteriorbh = null,
@@ -758,9 +704,7 @@ BEGIN
 						cartaintervsdesc = @horaintervsdesc,
 						cartainterjornadacompl = @horainterjornadacompl,
 						cartainterjornadacomplsdesc = @horainterjornadacomplsdesc,
-						cartahorasextra = null,
-						cartaprocessadopor = @usuarcodigo,
-						cartadataultimoprocessaamento = getdate()
+						cartahorasextra = null
 						where cartacodigo = @cartacodigo
 
 						-- PEGA HORA REALIZADA
@@ -788,12 +732,8 @@ BEGIN
 					@periodoiniciodatabase, -- 4
 					@periodofimdatabase ) -- 5
 				end
-					
-			fetch next from dados_historicos 
-			into @dia,@dt,@codigo_h,@indicacao,@cod_escala,@ctococodigo,@centccodigo,@feriado,@feriatipo,@acordcodigo,@cargocodigo,@tpapocodigo,@flagocorrencia
-			end -- END CURSOR dados_historicos
-			close dados_historicos
-			deallocate dados_historicos 
+				set @pk = @pk + 1
+			end
 			
 			-- INCLUI OCORRÊNCIAS
 			exec dbo.spug_incluirOcorrencias @mes,@ano, @funcicodigo
