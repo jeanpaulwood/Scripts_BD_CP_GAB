@@ -153,6 +153,15 @@ BEGIN
 				begin
 					set @datademissao = @periodofimdatabase
 				end
+				-- SE FUNCIONÁRIO ESTIVER DEMITIDO, LIMPA OS POSSÍVEIS CTs DE DÉBITO DIÁRIO DE BH DO CARTÃO.
+				if @datademissao < @periodofimdatabase and coalesce(@datademissao,'1900-01-01') > '1900-01-01'
+				begin
+					delete from tbgabcartaototalizador 
+					where funcicodigo = @funcicodigo and catcartocodigo = 16 and cartodatajornada > @datademissao and cartodatajornada <= @periodofimdatabase
+
+					update tbgabcartaodeponto set cartasaldoanteriorbh = null, cartasaldoatualbh = null, cartacreditobh = null, cartadebitobh = null
+					where funcicodigo = @funcicodigo and cartadatajornada > @datademissao and cartadatajornada <= @periodofimdatabase
+				end
 
 				-- ALTERAÇÃO 15/06/2020. ID DA DEMANDA: 36
 				/* CÓDIGO IMPLEMENTADO */
