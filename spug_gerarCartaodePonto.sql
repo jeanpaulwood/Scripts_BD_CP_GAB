@@ -111,8 +111,6 @@ BEGIN
 	@aptr datetime,
 	@num int,
 	@ult_apt_anterior datetime = NULL,
-	@contadorafd int,
-	@contadorcartaodeponto int,
 	@ult_apt datetime = NULL,
 	@dt_auxiliar datetime = NULL,
 	@horaespera int = NULL,
@@ -170,6 +168,7 @@ BEGIN
 		-- SE POSSUI ESCALA VINCULADA PARA O PERÍODO INFORMADO
 		else
 		begin
+
 			declare @datademissao datetime,@dataadmissao datetime
 			select top 1 @datademissao=funcidatademissao,@dataadmissao=coalesce(funcidataadmissao,'1900-01-01') from tbgabfuncionario (nolock) where funcicodigo = @funcicodigo
 			
@@ -177,6 +176,8 @@ BEGIN
 			begin
 				set @datademissao = @periodofimdatabase
 			end
+
+			declare @recalcular bit = (select recalcular from dbo.verificarRecalculoCP(@funcicodigo,@periodoiniciodatabase,@periodofimdatabase,@mes,@ano))
 
 			-- ALTERAÇÃO 12/06/2020. ID DA DEMANDA: 36
 			/* CÓDIGO IMPLEMENTADO */
@@ -595,24 +596,9 @@ BEGIN
 						@estendenoturno=estendenoturno from dbo.retornarInicioFimNoturno(@acordcodigo,@dt)
 						set @cartaadn = 0
 					end
-
-					-- CONTADOR DE APONTAMENTOS NA TABELA DE AFDT
-					-- ALTERAÇÃO 12/06/2020. ID DA DEMANDA: 36
-					set @contadorafd = (select count(horarios) from dbo.retornarApontamentosRealizadosComPreAssinalados2(@funcicodigo,@dt,@horarcodigo,@jornadalivre,@ctococodigo,@cartadesconsiderapreassinalado,@h_referencia,/* CÓDIGO ALTERADO */@leimotorista/* CÓDIGO ALTERADO */))
 					
-					-- CONTADOR DE APONTAMENTOS N TABELA DE CARTÃO DE PONTO
-					set @contadorcartaodeponto = (select sum ( (case when (carta_realizado_e1 is not null) then 1 else 0 end) +
-													(case when (carta_realizado_s1 is not null) then 1 else 0 end ) +
-													(case when (carta_realizado_e2 is not null) then 1 else 0 end ) +
-													(case when (carta_realizado_s2 is not null) then 1 else 0 end ) +
-													(case when (carta_realizado_e3 is not null) then 1 else 0 end ) +
-													(case when (carta_realizado_s3 is not null) then 1 else 0 end ) +
-													(case when (carta_realizado_e4 is not null) then 1 else 0 end ) + 
-													(case when (carta_realizado_s4 is not null) then 1 else 0 end ))
-													from tbgabcartaodeponto (nolock) where cartadatajornada = @dt and funcicodigo = @funcicodigo)
-					
-					-- SE HÁ NOVOS APONTAMENTOS NA TABELA DE AFDT
-					if @contadorafd <> @contadorcartaodeponto or @flagocorrencia = 1
+					-- SE O CARTÃO PRECISA RECALCULAR
+					if @recalcular = 1
 					begin
 						set @nacional = 0
 						set @regional = 0
@@ -724,13 +710,6 @@ BEGIN
 						
 					end
 					
-					-- INSERE
-					insert into @cartaodeponto values (
-					@mov_or_cc_bloq, -- 1
-					@escala_vinculada, -- 2
-					@func_ativo, -- 3
-					@periodoiniciodatabase, -- 4
-					@periodofimdatabase ) -- 5
 				end
 				set @pk = @pk + 1
 			end
@@ -756,6 +735,14 @@ BEGIN
 			close acordos
 			deallocate acordos
 			if @bancodehoras = 1 begin exec spug_incluirSaldoBhCartaodePonto @funcicodigo,@mes,@ano end
+
+			-- INSERE
+			insert into @cartaodeponto values (
+			@mov_or_cc_bloq, -- 1
+			@escala_vinculada, -- 2
+			@func_ativo, -- 3
+			@periodoiniciodatabase, -- 4
+			@periodofimdatabase ) -- 5
 		end -- END - SE POSSUI ESCALA VINCULADA PARA O PERÍODO INFORMADO
 	end
 
