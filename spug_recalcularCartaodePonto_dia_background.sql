@@ -259,7 +259,15 @@ BEGIN
 			-- SE HÁ ACORDO COLETIVO PARA O DIA
 			else
 			begin
-				set @jornadalivre = (select acordjornadalivre from tbgabacordocoletivo (nolock) where acordcodigo = @acordcodigo)
+				-- SE A INDICAÇÃO FOR FOLGA OU DSR.
+				if @ctococodigo = 2 or @ctococodigo = 3 
+				begin 
+					set @jornadalivre = 1
+				end
+				else
+				begin
+					set @jornadalivre = (select acordjornadalivre from tbgabacordocoletivo (nolock) where acordcodigo = @acordcodigo)
+				end
 				select 
 				@inicionoturno=inicionoturno,
 				@fimnoturno=fimnoturno,
