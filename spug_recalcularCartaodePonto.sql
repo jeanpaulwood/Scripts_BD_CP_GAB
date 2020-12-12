@@ -287,16 +287,7 @@ BEGIN
 						-- SE HÁ ACORDO COLETIVO PARA O DIA
 						else
 						begin
-							-- VERIFICA SE O ACORDO COLETIVO PARA O DIA É JORNADA LIVRE OU NÃO
-							-- SENDO QUE SE A INDICAÇÃO FOR DIFERENTE DE TRABALHO A JORNADA SEMPRE SERÁ LIVRE
-							if @indicacao = 'Trabalho'
-							begin
-								set @jornadalivre = (select acordjornadalivre from tbgabacordocoletivo (nolock) where acordcodigo = @acordcodigo)
-							end
-							else
-							begin
-								set @jornadalivre = 1
-							end
+							set @jornadalivre = (select acordjornadalivre from tbgabacordocoletivo (nolock) where acordcodigo = @acordcodigo)
 							select 
 							@inicionoturno=inicionoturno,
 							@fimnoturno=fimnoturno,
