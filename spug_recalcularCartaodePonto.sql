@@ -500,7 +500,7 @@ BEGIN
 				-- INCLUI, EXCLUI OU ATUALIZA OS TOTALIZADORES MENSAIS
 				declare acordos cursor for 
 				select coalesce(acordcodigo,0) from tbgabcartaodeponto (nolock) 
-				where funcicodigo = @funcicodigo and cartadatajornada between @periodoiniciodatabase and @periodofimdatabase group by acordcodigo
+				where funcicodigo = @funcicodigo and cartadatajornada between @periodoiniciodatabase and @periodofimdatabase and acordcodigo > 0 group by acordcodigo
 				open acordos
 				fetch next from acordos 
 				into @acordcodigo
