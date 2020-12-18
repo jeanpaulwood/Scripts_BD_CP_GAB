@@ -700,7 +700,7 @@ BEGIN
 				-- VERIFICA SE JÁ EXISTE UM REGISTRO PARA O DIA CORRENTE
 				else
 				begin
-					if @dataadmissao <= @dt or @dt <= @datademissao
+					if @dataadmissao <= @dt and @dt <= @datademissao
 					begin
 						-- CHAVE PRIMÁRIA DA TABELA CARTÃO DE PONTO
 						select top 1 @horarcodigo=horarcodigo,@cartadesconsiderapreassinalado=cartadesconsiderapreassinalado,@h_referencia=cartahorarreferencia from tbgabcartaodeponto (nolock) where cartacodigo = @cartacodigo
