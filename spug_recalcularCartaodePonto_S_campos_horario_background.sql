@@ -248,45 +248,6 @@ BEGIN
 						set @feriatipo = '';
 					end
 					
-					-- SE NÃO HÁ ACORDO COLETIVO PARA O DIA
-					if @acordcodigo = 0
-					begin
-						-- SE A INDICAÇÃO PARA O DIA FOR <> DE TRABALHO
-						if @ctococodigo <> 1
-						begin
-							set @jornadalivre = 1
-						end
-						-- SE A INDICAÇÃO PARA O DIA FOR = TRABALHO
-						else
-						begin
-							set @jornadalivre = null
-						end
-						set @inicionoturno = null
-						set @fimnoturno = null
-						set @fatornoturno = null
-						set @estendenoturno = null
-						
-					end
-
-					-- SE HÁ ACORDO COLETIVO PARA O DIA
-					else
-					begin
-						-- SE A INDICAÇÃO FOR FOLGA OU DSR.
-						if @ctococodigo = 2 or @ctococodigo = 3 
-						begin 
-							set @jornadalivre = 1
-						end
-						else
-						begin
-							set @jornadalivre = (select acordjornadalivre from tbgabacordocoletivo (nolock) where acordcodigo = @acordcodigo)
-						end
-						select 
-						@inicionoturno=inicionoturno,
-						@fimnoturno=fimnoturno,
-						@fatornoturno=fatornoturno,
-						@estendenoturno=estendenoturno from dbo.retornarInicioFimNoturno(@acordcodigo,@dt)
-					end
-					
 					set @nacional = 0
 					set @regional = 0
 					set @municipal = 0
@@ -336,6 +297,45 @@ BEGIN
 						select @horarcodigo = F.codigohorario, @ctococodigo = CO.ctococodigo 
 						from cjRetornarHorarioEscala (@cod_escala,@dt,@dt) F
 						left join tbgabcartaoocorrencia CO (nolock) on F.indicacao= CO.ctocodescricao
+
+						-- SE NÃO HÁ ACORDO COLETIVO PARA O DIA
+						if @acordcodigo = 0
+						begin
+							-- SE A INDICAÇÃO PARA O DIA FOR <> DE TRABALHO
+							if @ctococodigo <> 1
+							begin
+								set @jornadalivre = 1
+							end
+							-- SE A INDICAÇÃO PARA O DIA FOR = TRABALHO
+							else
+							begin
+								set @jornadalivre = null
+							end
+							set @inicionoturno = null
+							set @fimnoturno = null
+							set @fatornoturno = null
+							set @estendenoturno = null
+							
+						end
+
+						-- SE HÁ ACORDO COLETIVO PARA O DIA
+						else
+						begin
+							-- SE A INDICAÇÃO FOR FOLGA OU DSR.
+							if @ctococodigo = 2 or @ctococodigo = 3 
+							begin 
+								set @jornadalivre = 1
+							end
+							else
+							begin
+								set @jornadalivre = (select acordjornadalivre from tbgabacordocoletivo (nolock) where acordcodigo = @acordcodigo)
+							end
+							select 
+							@inicionoturno=inicionoturno,
+							@fimnoturno=fimnoturno,
+							@fatornoturno=fatornoturno,
+							@estendenoturno=estendenoturno from dbo.retornarInicioFimNoturno(@acordcodigo,@dt)
+						end
 
 						-- PREENCHE OS HORÁRIOS PREVISTOS
 						if @horarcodigo <> 0
@@ -490,6 +490,45 @@ BEGIN
 					end
 					else
 					begin
+						-- SE NÃO HÁ ACORDO COLETIVO PARA O DIA
+						if @acordcodigo = 0
+						begin
+							-- SE A INDICAÇÃO PARA O DIA FOR <> DE TRABALHO
+							if @ctococodigo <> 1
+							begin
+								set @jornadalivre = 1
+							end
+							-- SE A INDICAÇÃO PARA O DIA FOR = TRABALHO
+							else
+							begin
+								set @jornadalivre = null
+							end
+							set @inicionoturno = null
+							set @fimnoturno = null
+							set @fatornoturno = null
+							set @estendenoturno = null
+							
+						end
+
+						-- SE HÁ ACORDO COLETIVO PARA O DIA
+						else
+						begin
+							-- SE A INDICAÇÃO FOR FOLGA OU DSR.
+							if @ctococodigo = 2 or @ctococodigo = 3 
+							begin 
+								set @jornadalivre = 1
+							end
+							else
+							begin
+								set @jornadalivre = (select acordjornadalivre from tbgabacordocoletivo (nolock) where acordcodigo = @acordcodigo)
+							end
+							select 
+							@inicionoturno=inicionoturno,
+							@fimnoturno=fimnoturno,
+							@fatornoturno=fatornoturno,
+							@estendenoturno=estendenoturno from dbo.retornarInicioFimNoturno(@acordcodigo,@dt)
+						end
+
 						-- CURSOR PARA RODAR OS APTS REALIZADOS
 						DECLARE realizadas CURSOR FOR
 						-- ALTERADO 12/06/2020. ID DA DEMANDA: 36
